@@ -324,7 +324,7 @@ class ThreeAddressCode(Instruction):
         return " -> " in line
 
     def get_actual_instruction(self, opcode: str, reg_width: RegWidth):
-        return f"{opcode} {ConcreteRegister('a', reg_width)}, {ConcreteRegister('d', reg_width)}"
+        return f"{opcode} {ConcreteRegister('d', reg_width)}, {ConcreteRegister('a', reg_width)}"
 
 
 class MultInstruction(ThreeAddressCode):
@@ -554,6 +554,17 @@ if False:
     movq $21, %@0
     addq [ %@0 | %@0 ] -> %@1
     movq %@1, %@r0
+    """))
+
+if False:
+    compile_and_run(process("""
+    .function minijava_main 0 1
+    movq $5, %@0
+    movq $2, %@1
+    subq [ %@1 | %@0 ] -> %@2
+    call __stdlib_println [ %@2 ]
+    subq [ %@0 | %@1 ] -> %@3
+    call __stdlib_println [ %@3 ]
     """))
 
 if False:
