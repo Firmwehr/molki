@@ -553,7 +553,7 @@ if False:
     .function minijava_main 0 1
     movq $21, %@0
     addq [ %@0 | %@0 ] -> %@1
-    movq %@1, %@r0
+    call __stdlib_println [ %@1 ]
     """))
 
 if False:
@@ -573,7 +573,7 @@ if False:
     movq $13, %@0
     movq $5, %@1
     mulq [ %@0 | %@1 ] -> %@2
-    movq %@2, %@r0
+    call __stdlib_println [ %@2 ]
     """))
 
 if False:
@@ -586,16 +586,16 @@ if False:
     call __stdlib_println [ %@3 ]
     """))
 
-if True:
+if False:
     compile_and_run(process("""
     .function minijava_main 0 1
     movq $1, %@0
     movq $7, %@1
     shl [%@0| %@1] -> %@2
-    movq %@2, %@r0
+    call __stdlib_println [ %@2 ]
     """))
 
-if False:
+if True:
     compile_and_run(process("""
     .function fib 1 1
     cmpq $1, %@0
@@ -613,7 +613,8 @@ if False:
 
     .function minijava_main 0 1
     movq $9, %@0
-    call fib [ %@0 ] -> %@r0
+    call fib [ %@0 ] -> %@1
+    call __stdlib_println [ %@1 ]
     """))
 
 if False:
