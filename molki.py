@@ -131,7 +131,7 @@ class AsmUnit:
         return self
 
     def comment(self, comment: str) -> 'AsmUnit':
-        return self.raw(f"/* {comment} */")
+        return self.raw(f"/* {comment.replace('*/', '* /')} */")
 
     def allocate_register(self, reg: Register) -> 'AsmUnit':
         """
