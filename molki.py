@@ -528,8 +528,12 @@ def process_lines(lines: List[str]) -> str:
     for i, line in enumerate(map(str.strip, lines), start=1):
         try:
             if line.startswith(".function"):
+                if cur_func is not None:
+                    print(f"Warning: Inserted missing .endfunction before line {i}", file=sys.stderr)
                 cur_func = Function(i, line)
                 functions.append(cur_func)
+            elif line.startswith(".endfunction"):
+                cur_func = None
             elif cur_func is None:
                 pre_lines.append(line)
             elif line.startswith("."):
@@ -627,6 +631,7 @@ if False:
     fib_basecase:
     movq %@0, %@r0
     fib_end:
+    .endfunction
 
     .function minijava_main 0 1
     movq $9, %@0
