@@ -307,71 +307,78 @@ class ThreeAddressCode(Instruction):
         target = Register(m.group(3))
 
         reg_width = target.width()
-        return str(AsmUnit(regs, ["a", "b", "c", "d", "r8"])
+
+        actual = self.get_actual_instruction(opcode, reg_width)
+
+        return str(AsmUnit(regs, ["b", "c", "si", "di", "r8"])
                    .comment(self.line)
                    .loads(*self.registers())
-                   .move_from_anything_to_concrete_reg(source1_raw, ConcreteRegister('si', RegWidth.QUAD))
-                   .move_from_anything_to_concrete_reg(source2_raw, ConcreteRegister('di', RegWidth.QUAD))
-                   .instruction(f"{opcode} {ConcreteRegister('si', reg_width)}, {ConcreteRegister('di', reg_width)}")
-                   .move_from_concrete("di", target)
+                   .move_from_anything_to_concrete_reg(source1_raw, ConcreteRegister('d', RegWidth.QUAD))
+                   .move_from_anything_to_concrete_reg(source2_raw, ConcreteRegister('a', RegWidth.QUAD))
+                   .instruction(actual)
+                   .move_from_concrete("a", target)
                    .store(target))
 
     @classmethod
     def matches(cls, line: str) -> bool:
         return " -> " in line
 
+    def get_actual_instruction(self, opcode: str, reg_width: RegWidth):
+        return f"{opcode} {ConcreteRegister('a', reg_width)}, {ConcreteRegister('d', reg_width)}"
+
 
 class MultInstruction(ThreeAddressCode):
     """
-    [i]mul <source 1, might be address mode>, <source 2, must be register> -> <target register>
+    [i]mul [ <source 1> | <source 2> ] -> <target register>
     """
-
-    def toAsm(self, regs: RegisterTable):
-        [raw, _] = map(str.strip, self.line.split("->"))
-        raw = ",".join(raw.split(",")[0:-1])
-        source2 = self.registers()[-2]
-        target = self.registers()[-1]
-        return str(AsmUnit(regs, ["b", "c", "si", "di"])
-                   .comment(self.line)
-                   .loads(*self.registers())
-                    .move_to_concrete(source2, "a")
-                   .instruction(raw)
-                   .move_from_concrete("a", target)
-                   .store(target))
 
     @classmethod
     def matches(cls, line: str):
         return ThreeAddressCode.matches(line) and line.startswith("mul") or line.startswith("imul")
 
+    def get_actual_instruction(self, opcode: str, reg_width: RegWidth):
+        return f"{opcode} {ConcreteRegister('d', reg_width)}"
+
 
 class DivInstruction(Instruction):
     """
-    [i]div <source 1, must be register>, <source 2, might be address mode> -> <target register div>, <target register mod>
+    [i]div [ <source 1> | <source 2> ] -> [ <target register div> | <target register mod> ]
     """
 
     def toAsm(self, regs: RegisterTable):
-        [raw, targets] = map(str.strip, self.line.split("->"))
-        [div_source1, source2_raw] = raw.split(",", 1)
-        [div, source1_raw] = div_source1.split()
-        raw = div + source2_raw
-        source1 = self.registers()[0]
-        target_div = self.registers()[-2]
-        target_mod = self.registers()[-1]
-        return str(AsmUnit(regs, ["b", "c", "si", "di"])
+        m = re.match(r"([a-z]+)\s*\[([^\]]*)\]\s*->\s*\[([^\]]*)\]", self.line)
+        if not m:
+            raise MolkiError("Andi fails at regex")
+
+        opcode = m.group(1)
+        args = list(map(str.strip, m.group(2).split("|")))
+        targets = list(map(str.strip, m.group(3).split("|")))
+        assert(len(args) == 2)
+        source1_raw = args[0]
+        source2_raw = args[1]
+        assert(len(targets) == 2)
+        target_div = Register(targets[0])
+        target_mod = Register(targets[1])
+
+        reg_width = target_div.width()
+
+        return str(AsmUnit(regs, ["c", "si", "di", "r8", "r9", "r10"])
                    .comment(self.line)
                    .loads(*self.registers())
-                   .move_to_concrete(source1, "a")
+                   .move_from_anything_to_concrete_reg(source1_raw, ConcreteRegister('a', RegWidth.QUAD))
+                   .move_from_anything_to_concrete_reg(source2_raw, ConcreteRegister('b', RegWidth.QUAD))
                    .raw("cltd")
-                   .instruction(raw)
+                   .instruction(f"{opcode} {ConcreteRegister('b', reg_width)}")
                    .move_from_concrete("a", target_div)
                    .store(target_div)) + "\n" + \
-                str(AsmUnit(regs, ["b", "c", "si", "di"])
-                    .loads(*self.registers())
-                    .move_to_concrete(source1, "a")
-                    .raw("cltd")
-                    .instruction(raw)
-                    .move_from_concrete("d", target_mod)
-                    .store(target_mod))
+               str(AsmUnit(regs, ["c", "si", "di", "r8", "r9", "r10"])
+                   .loads(*self.registers())
+                   .move_from_anything_to_concrete_reg(source1_raw, ConcreteRegister('a', RegWidth.QUAD))
+                   .move_from_anything_to_concrete_reg(source2_raw, ConcreteRegister('b', RegWidth.QUAD))
+                   .raw("cltd")
+                   .instruction(f"{opcode} {ConcreteRegister('b', reg_width)}")
+                   .move_from_concrete("d", target_mod)
+                   .store(target_mod))
 
 
     @classmethod
@@ -381,25 +388,26 @@ class DivInstruction(Instruction):
 
 class ShiftInstruction(Instruction):
     """
-    {shl,shr,sal,sar,rol,ror} <source 1, must be register>, <source 2, must be register or immediate> -> <target register>
+    {shl,shr,sal,sar,rol,ror} [ <source 1> | <source 2> ] -> <target register>
     """
 
     def toAsm(self, regs: RegisterTable):
-        m = re.match(r"([a-z]+)\s+(%@[jr0-9]+[lwd]?)\s*,\s*(%@[jr0-9]+[lwd]?|\$[^-]+)\s*->\s*(%@[jr0-9]+[lwd]?)", self.line)
+        m = re.match(r"([a-z]+)\s*\[([^\]]*)\]\s*->\s*(%@[jr0-9]+[lwd]?)", self.line)
         if not m:
-            raise MolkiError("Andi failed at regex")
+            raise MolkiError("Andi fails at regex")
 
         opcode = m.group(1)
-        source1_raw = m.group(2)
-        source2_raw = m.group(3)
-        target_raw = m.group(4)
+        args = list(map(str.strip, m.group(2).split("|")))
+        assert(len(args) == 2)
+        source1_raw = args[0]
+        source2_raw = args[1]
+        target = Register(m.group(3))
 
         source1 = Register(source1_raw)
         if "%" in source2_raw:
             source2 = f"{regs[Register(source2_raw)]}(%rbp)"
         else:
             source2 = source2_raw
-        target = Register(target_raw)
 
         instr = f"{opcode} %cl, {source1_raw}"
 
@@ -553,20 +561,30 @@ if False:
     .function minijava_main 0 1
     movq $13, %@0
     movq $5, %@1
-    divq %@0, %@1 -> %@2, %@3
+    mulq [ %@0 | %@1 ] -> %@2
     movq %@2, %@r0
     """))
 
 if False:
     compile_and_run(process("""
     .function minijava_main 0 1
-    movq $1, %@0
-    movq $7, %@1
-    shl %@0, %@1 -> %@2
-    movq %@2, %@r0
+    movq $13, %@0
+    movq $5, %@1
+    divq [ %@0 | %@1 ] -> [%@2 | %@3]
+    call __stdlib_println [ %@2 ]
+    call __stdlib_println [ %@3 ]
     """))
 
 if True:
+    compile_and_run(process("""
+    .function minijava_main 0 1
+    movq $1, %@0
+    movq $7, %@1
+    shl [%@0| %@1] -> %@2
+    movq %@2, %@r0
+    """))
+
+if False:
     compile_and_run(process("""
     .function fib 1 1
     cmpq $1, %@0
