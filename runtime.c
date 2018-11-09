@@ -40,6 +40,15 @@ void *__stdlib_malloc(void)
     return malloc(size);
 }
 
+void *__stdlib_calloc(void)
+{
+    int64_t nmemb;
+    int64_t size;
+    asm("movq 24(%%rbp), %0\n\t" : "=r" (size));
+    asm("movq 16(%%rbp), %0\n\t" : "=r" (size));
+    return calloc(nmemb, size);
+}
+
 int main(int argc, char **argv)
 {
   return minijava_main();
