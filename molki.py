@@ -485,6 +485,14 @@ class BasicInstruction(Instruction):
         return True
 
 
+class BasicInstructionNoWriteback(BasicInstruction):
+    def writeback_registers(self) -> List[Register]:
+        return []
+
+    @classmethod
+    def matches(cls, line: str):
+        return line.startswith("cmp") or line.startswith("test") or line.startswith("push")
+
 class Directive(Instruction):
 
     def toAsm(self, _: RegisterTable) -> str:
