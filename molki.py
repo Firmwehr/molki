@@ -290,6 +290,24 @@ class Instruction:
     def matches(cls, line: str) -> bool:
         return False
 
+    @classmethod
+    def match_line(cls, line_number: int, line: str) -> 'Instruction':
+        instruction_constrs = [
+            CallInstruction,
+            MultInstruction,
+            DivInstruction,
+            ShiftInstruction,
+            ThreeAddressCode,
+            BasicInstructionNoWriteback,
+            BasicInstruction
+        ]
+        for constr in instruction_constrs:
+            if constr.matches(line):
+                return constr(line_number, line)
+
+        raise MolkiError(f"No instruction class matches line {line_number}: {line}")
+
+
 class SpecialInstruction(Instruction):
     """
     Need extra handling, but have direct counter parts in x86
@@ -454,7 +472,7 @@ class CallInstruction(MetaInstruction):
         asm_unit = AsmUnit(regs, [])
         asm_unit.comment(self.line)
         for arg in args:
-            pushq = BasicInstruction(self.line_number, f"pushq {arg}")
+            pushq = Instruction.match_line(self.line_number, f"pushq {arg}")
             asm_unit.raw(pushq.toAsm(regs))
 
         asm_unit.raw(f"callq {function_name}")
@@ -482,7 +500,7 @@ class BasicInstruction(Instruction):
                    .comment(self.line)
                    .loads(*self.registers())
                    .instruction(self.line)
-                   .stores(*self.registers()))
+                   .stores(*self.writeback_registers()))
 
     @classmethod
     def matches(cls, line: str):
@@ -517,19 +535,7 @@ def process_lines(lines: List[str]) -> str:
             elif line.startswith("."):
                 cur_func.extend(Directive(i, line))
             else:
-                instr = None
-                instruction_constrs = [
-                    CallInstruction,
-                    MultInstruction,
-                    DivInstruction,
-                    ShiftInstruction,
-                    ThreeAddressCode,
-                    BasicInstruction
-                ]
-                for constr in instruction_constrs:
-                    if constr.matches(line):
-                        cur_func.extend(constr(i, line))
-                        break
+                cur_func.extend(Instruction.match_line(i, line))
         except Exception as e:
             print(f"error in line {i}", file=sys.stderr)
             raise e
