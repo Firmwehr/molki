@@ -282,6 +282,10 @@ class Instruction:
     def registers(self) -> List[Register]:
         return registers_in(self.line)
 
+    def writeback_registers(self) -> List[Register]:
+        # Safe default
+        return self.registers()
+
     @classmethod
     def matches(cls, line: str) -> bool:
         return False
