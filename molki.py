@@ -51,6 +51,12 @@ class Register:
     def __str__(self):
         return self.name
 
+    def name_without_width(self) -> str:
+        if self.width() != RegWidth.QUAD:
+            return self.name[:-1]
+        else:
+            return self.name
+
     def width(self) -> RegWidth:
         return {"l": RegWidth.BYTE, "w": RegWidth.WORD, "d": RegWidth.DOUBLE}.get(self.name[-1], RegWidth.QUAD)
 
@@ -88,22 +94,24 @@ class RegisterTable:
     """
 
     def __init__(self):
-        self._raw = {}  # type: Dict[Register, int]
+        self._raw = {}  # type: Dict[str, int]
         self._cur_offset = 0
 
     def __getitem__(self, reg: Register) -> int:
-        if reg in self._raw:
-            return self._raw[reg]
+        regname = reg.name_without_width()
+        if regname in self._raw:
+            return self._raw[regname]
         self._cur_offset -= 8
-        self._raw[reg] = self._cur_offset
+        self._raw[regname] = self._cur_offset
         return self._cur_offset
 
     def __setitem__(self, reg: Register, offset: int):
-        if reg in self._raw:
+        regname = reg.name_without_width()
+        if regname in self._raw:
             raise MolkiError(f"Register {reg} already has offset {self._raw[reg]}")
         if offset <= 0:
             raise MolkiError("Fixed-position registers only allowed at positive offsets")
-        self._raw[reg] = offset
+        self._raw[regname] = offset
 
     def __str__(self):
         return str(self._raw)
@@ -166,9 +174,9 @@ class AsmUnit:
         self._lines.append(result)
         return self
 
-    def replace_pseudo_regs(self, expr: str) -> str:
+    def replace_pseudo_regs(self, expr: str, reg_width: RegWidth = None) -> str:
         for (reg, conc) in self._concrete.items():
-            expr = expr.replace(str(reg), str(ConcreteRegister(conc, reg.width())))
+            expr = expr.replace(str(reg), str(ConcreteRegister(conc, reg_width or reg.width())))
         return expr
 
     def store(self, target: Register) -> 'AsmUnit':
@@ -194,7 +202,7 @@ class AsmUnit:
         return self
 
     def move_from_anything_to_concrete_reg(self, source: str, target: ConcreteRegister) -> 'AsmUnit':
-        return self.raw(f"movq {self.replace_pseudo_regs(source)}, {target}")
+        return self.raw(f"movq {self.replace_pseudo_regs(source, RegWidth.QUAD)}, {target}")
 
     def stores(self, *targets: Register) -> 'AsmUnit':
         for target in targets:
@@ -585,6 +593,17 @@ if False:
     subq [ %@1 | %@0 ] -> %@2
     call __stdlib_println [ %@2 ]
     subq [ %@0 | %@1 ] -> %@3
+    call __stdlib_println [ %@3 ]
+    """))
+
+if False:
+    compile_and_run(process("""
+    .function minijava_main 0 1
+    movq $5, %@0
+    movq $2, %@1
+    subl [ %@1 | %@0 ] -> %@2
+    call __stdlib_println [ %@2 ]
+    subq [ %@0d | %@1d ] -> %@3d
     call __stdlib_println [ %@3 ]
     """))
 

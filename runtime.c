@@ -18,7 +18,7 @@ void __stdlib_println(void)
 {
     int64_t value;
     asm("movq 16(%%rbp), %0\n\t" : "=r" (value));
-    printf("%" PRIi64 "\n", value);
+    printf("%" PRIi32 "\n", (int32_t)value);
 }
 
 void __stdlib_write(void)
