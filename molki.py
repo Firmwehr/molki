@@ -291,16 +291,23 @@ class SpecialInstruction(Instruction):
 
 class ThreeAddressCode(Instruction):
     """
-    instr <source 1, might be immediate or address mode> -> <source 2, must be register> -> <target register>
+    instr [ <source 1> | <source 2> ] -> <target register>
     """
 
     def toAsm(self, regs: RegisterTable) -> str:
-        [opcode, rest] = self.line.split(" ", 1)
-        [source1_raw, source2_raw, target_raw] = map(str.strip, rest.split("->"))
-        reg_width = Register(target_raw).width()
-        source2 = self.registers()[-2]
-        target = self.registers()[-1]
-        return str(AsmUnit(regs, ["a", "b", "c", "d"])
+        m = re.match(r"([a-z]+)\s*\[([^\]]*)\]\s*->\s*(%@[jr0-9]+[lwd]?)", self.line)
+        if not m:
+            raise MolkiError("Andi fails at regex")
+
+        opcode = m.group(1)
+        args = list(map(str.strip, m.group(2).split("|")))
+        assert(len(args) == 2)
+        source1_raw = args[0]
+        source2_raw = args[1]
+        target = Register(m.group(3))
+
+        reg_width = target.width()
+        return str(AsmUnit(regs, ["a", "b", "c", "d", "r8"])
                    .comment(self.line)
                    .loads(*self.registers())
                    .move_from_anything_to_concrete_reg(source1_raw, ConcreteRegister('si', RegWidth.QUAD))
@@ -536,8 +543,8 @@ def compile_and_run(file: str, output: str = "test"):
 if False:
     compile_and_run(process("""
     .function minijava_main 0 1
-    movq $21, %@0 
-    addq %@0, %@0 -> %@1
+    movq $21, %@0
+    addq [ %@0 | %@0 ] -> %@1
     movq %@1, %@r0
     """))
 
@@ -559,28 +566,28 @@ if False:
     movq %@2, %@r0
     """))
 
-if False:
+if True:
     compile_and_run(process("""
     .function fib 1 1
     cmpq $1, %@0
     jle fib_basecase
-    subq $1 -> %@0 -> %@1
-    subq $2 -> %@0 -> %@2
+    subq [ $1 | %@0 ] -> %@1
+    subq [ $2 | %@0 ] -> %@2
     call fib [ %@1 ] -> %@3
     call fib [ %@2 ] -> %@4
-    addq %@3 -> %@4 -> %@r0
+    addq [ %@3 | %@4 ] -> %@r0
     jmp fib_end
-    
+
     fib_basecase:
     movq %@0, %@r0
     fib_end:
-    
+
     .function minijava_main 0 1
     movq $9, %@0
     call fib [ %@0 ] -> %@r0
     """))
 
-if True:
+if False:
     compile_and_run(process("""
     .function minijava_main 0 1
     call __stdlib_println [ $42424242 ]
