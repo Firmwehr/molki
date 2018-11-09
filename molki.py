@@ -667,6 +667,8 @@ if __name__ == "__main__":
     mode = "assemble"
     if len(sys.argv) >= 2 and sys.argv[1] == "--run":
         mode = "run"
+    if len(sys.argv) >= 2 and sys.argv[1] == "--line-numbers":
+        mode = "line-numbers"
 
     input = None
 
@@ -677,6 +679,8 @@ if __name__ == "__main__":
 
     if mode == "assemble":
         print(result)
+    elif mode == "line-numbers":
+        print("\n".join(f"{i + 1:3}: {line}" for i, line in enumerate(result.splitlines())))
     elif mode == "run":
         compile_and_run(result)
     else:
