@@ -421,7 +421,6 @@ class CallInstruction(MetaInstruction):
     """
 
     def toAsm(self, regs: RegisterTable):
-        print(self.line)
         m = re.match(r"call\s+([\w]+)\s*\[([^\]]*)\]\s*(->\s*(%@[jr0-9]+[lwd]?))?", self.line)
         if not m:
             raise MolkiError("Andi fails at regex")
