@@ -263,6 +263,9 @@ ret
 
         return result
 
+def registers_in(raw: str) -> List[Register]:
+    return list(map(Register, re.findall("%@[jr0-9]+[lwd]?", raw)))
+
 class Instruction:
     """
     Might be anything, even a label: everything that constitutes a line in assembler code
@@ -277,7 +280,7 @@ class Instruction:
         raise NotImplementedError()
 
     def registers(self) -> List[Register]:
-        return list(map(Register, re.findall("%@[jr0-9]+[lwd]?", self.line)))
+        return registers_in(self.line)
 
     @classmethod
     def matches(cls, line: str) -> bool:
@@ -432,7 +435,7 @@ class MetaInstruction(Instruction):
 
 class CallInstruction(MetaInstruction):
     """
-    call <function name> [ <argument register or immediate> | <argument> | ... | <argument> ] (-> <result register>)?
+    call <function name> [ <argument> | <argument> | ... | <argument> ] (-> <result register>)?
     """
 
     def toAsm(self, regs: RegisterTable):
@@ -447,12 +450,8 @@ class CallInstruction(MetaInstruction):
         asm_unit = AsmUnit(regs, [])
         asm_unit.comment(self.line)
         for arg in args:
-            arg_source = None
-            if "%" in arg:
-                arg_source = f"{regs[Register(arg)]}(%rbp)"
-            else:
-                arg_source = arg
-            asm_unit.raw(f"pushq {arg_source}")
+            pushq = BasicInstruction(self.line_number, f"pushq {arg}")
+            asm_unit.raw(pushq.toAsm(regs))
 
         asm_unit.raw(f"callq {function_name}")
 
@@ -595,7 +594,7 @@ if False:
     call __stdlib_println [ %@2 ]
     """))
 
-if True:
+if False:
     compile_and_run(process("""
     .function fib 1 1
     cmpq $1, %@0
@@ -621,4 +620,19 @@ if False:
     compile_and_run(process("""
     .function minijava_main 0 1
     call __stdlib_println [ $42424242 ]
+    """))
+
+if True:
+    compile_and_run(process("""
+    .function minijava_main 0 1
+    call __stdlib_malloc [ $40 ] -> %@0
+
+    movq $42, 20(%@0)
+    call __stdlib_println [ 20(%@0) ]
+
+    movq $24, %@1
+    movq $23, (%@0,%@1)
+    call __stdlib_println [ (%@0, %@1) ]
+
+    movq $0, %@r0
     """))
