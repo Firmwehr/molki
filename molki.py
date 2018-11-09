@@ -554,7 +554,6 @@ def process(code: str) -> str:
 
 
 def assemble(file: str, output: str = "test.o"):
-    print("\n".join(f"{i + 1}: {line}" for i, line in enumerate(file.splitlines())))
     with tempfile.NamedTemporaryFile(suffix=".s", mode="w") as f:
         print(file, file=f)
         f.flush()
@@ -563,7 +562,8 @@ def assemble(file: str, output: str = "test.o"):
 
 def compile_and_run(file: str, output: str = "test"):
     assemble(file, output + ".o")
-    print("return code: " + str(os.system(f"gcc runtime.c {output}.o -o {output} && ./{output}") >> 8))
+    script_path = os.path.dirname(__file__)
+    print("return code: " + str(os.system(f"gcc {script_path}/runtime.c {output}.o -o {output} && ./{output}") >> 8))
 
 if False:
     compile_and_run(process("""
@@ -640,7 +640,7 @@ if False:
     call __stdlib_println [ $42424242 ]
     """))
 
-if True:
+if False:
     compile_and_run(process("""
     .function minijava_main 0 1
     call __stdlib_malloc [ $40 ] -> %@0
@@ -657,3 +657,22 @@ if True:
 
     movq $0, %@r0
     """))
+
+if __name__ == "__main__":
+    mode = "assemble"
+    if len(sys.argv) >= 2 and sys.argv[1] == "--run":
+        mode = "run"
+
+    input = None
+
+    with open("/dev/stdin") as f:
+        input = f.read()
+
+    result = process(input)
+
+    if mode == "assemble":
+        print(result)
+    elif mode == "run":
+        compile_and_run(result)
+    else:
+        raise MolkiError("Huh?")
