@@ -45,7 +45,7 @@ void *__stdlib_calloc(void)
     int64_t nmemb;
     int64_t size;
     asm("movq 24(%%rbp), %0\n\t" : "=r" (size));
-    asm("movq 16(%%rbp), %0\n\t" : "=r" (size));
+    asm("movq 16(%%rbp), %0\n\t" : "=r" (nmemb));
     return calloc(nmemb, size);
 }
 
