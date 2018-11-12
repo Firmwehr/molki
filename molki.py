@@ -14,41 +14,62 @@ TODO
 
 """
 
-import os
-import tempfile
+import argparse, os, re, sys, tempfile
 from enum import Enum
 from typing import Dict, Iterable, List
-import re
-
-import sys
 
 
 class MolkiError(Exception):
     pass
 
+
 class ParseError(MolkiError):
     pass
 
+
 class RegWidth(Enum):
+    """
+    Width of a register or instruction.
+    Named according to Intel tradition.
+    """
     BYTE = 1
     WORD = 2
     DOUBLE = 4
     QUAD = 8
 
+
 class Register:
+    """
+    Represents a pseudo-register, represented in source code as %@<index><width-suffix>.
+    The index should be numerical or "r0" (the function result pseudo-register),
+    the width suffix is assigned in the same way as for r8 through r15:
+    'b' for byte, 'w' for word, 'd' for doubleword, and 'q' for quadword.
+    """
 
     def __init__(self, name: str):
+        """
+        Constructs a new pseudo-register object.
+        :param name: The name of the register. Includes the %@ sigill, the index, and the width suffix.
+        """
+        if not re.match("%@[jr0-9]+[lwd]?", name):
+            raise ParseError(f"Register name {name} is invalid.")
         self.name = name
 
     def __hash__(self):
         return hash(self.name)
 
     def __eq__(self, other):
+        """
+        Compares two pseudo-registers by name.
+        """
         if isinstance(other, Register):
             return self.name == other.name
         return False
 
     def __str__(self):
+        """
+        :return: The name of this register.
+        """
         return self.name
 
     def name_without_width(self) -> str:
@@ -61,10 +82,17 @@ class Register:
         return {"l": RegWidth.BYTE, "w": RegWidth.WORD, "d": RegWidth.DOUBLE}.get(self.name[-1], RegWidth.QUAD)
 
 class ConcreteRegister:
+    """
+    Represents a concrete register.
+    The name is only the base name of the register, without % or the width suffix.
+    The base names are 'a', 'b', 'c', 'd', 'sp', 'bp', 'si', 'di', 'r8' through 'r15'.
+    """
 
     def __init__(self, name: str, width: RegWidth):
         self.name = name
         self.width = width
+        # See if the name is valid
+        self.asm_name()
 
     def asm_name(self) -> str:
         if self.name in ["a", "b", "c", "d"]:
@@ -82,15 +110,18 @@ class ConcreteRegister:
                     RegWidth.WORD: self.name + "w",
                     RegWidth.DOUBLE: self.name + "d",
                     RegWidth.QUAD: self.name}[self.width]
-        raise MolkiError(f"unknown register {self.name}")
+        raise ParseError(f"unknown concrete register base name {self.name}")
 
     def __str__(self):
+        """
+        :return: The full register name, including % and the width suffix.
+        """
         return "%" + self.asm_name()
 
 
 class RegisterTable:
     """
-    Maps register to offset (in bytes)
+    Maps register to frame offset (in bytes)
     """
 
     def __init__(self):
@@ -98,6 +129,11 @@ class RegisterTable:
         self._cur_offset = 0
 
     def __getitem__(self, reg: Register) -> int:
+        """
+        Returns the frame offset of the given pseudo-register.
+        If the register has not yet been seen, a new slot on the frame is allocated,
+        assigned to the given register, and returned.
+        """
         regname = reg.name_without_width()
         if regname in self._raw:
             return self._raw[regname]
@@ -106,6 +142,11 @@ class RegisterTable:
         return self._cur_offset
 
     def __setitem__(self, reg: Register, offset: int):
+        """
+        Manually sets the frame offset of a pseudo-register.
+        The offset must be non-negative (i.e. outside the frame),
+        and the register must not have an offset yet.
+        """
         regname = reg.name_without_width()
         if regname in self._raw:
             raise MolkiError(f"Register {reg} already has offset {self._raw[reg]}")
@@ -117,6 +158,9 @@ class RegisterTable:
         return str(self._raw)
 
     def size(self) -> int:
+        """
+        Returns the size of the frame in bytes.
+        """
         return -self._cur_offset
 
     def __repr__(self):
@@ -124,26 +168,41 @@ class RegisterTable:
 
 
 class AsmUnit:
+    """
+    Represents a pseudo-instruction along with its supporting instructions such as movs.
+    Instructions are stored in the AsmUnit in a line-based manner.
+    The different builder methods each add one or more lines.
+    """
 
     def __init__(self, regs: RegisterTable, usable_regs: List[str] = None):
+        """
+        :param usable_regs: Base names of the concrete registers which may be used as temporary storage.
+        """
         self._lines = []   # type: List[str]
         self._concrete = {}  # type: Dict[Register, str]
         self._regs = regs
         self._usable = usable_regs or ["a", "b", "c", "d"]  # type: List[str]
 
     def __str__(self):
+        """
+        :return: The lines accumulated so far.
+        """
         return "\n".join(self._lines)
 
     def raw(self, anything: str) -> 'AsmUnit':
+        """
+        Appends the given string verbatim as a new line.
+        :return: self
+        """
         self._lines.append(anything)
         return self
 
     def comment(self, comment: str) -> 'AsmUnit':
         return self.raw(f"/* {comment.replace('*/', '* /')} */")
 
-    def allocate_register(self, reg: Register) -> 'AsmUnit':
+    def reserve_register(self, reg: Register) -> 'AsmUnit':
         """
-        Add mov from source to any free register
+        Reserve the given concrete register for later use.
         """
         conc = self._pop_free_reg()
         self._concrete[reg] = conc
@@ -151,7 +210,7 @@ class AsmUnit:
 
     def load(self, source: Register) -> 'AsmUnit':
         """
-        Add mov from source to any free register
+        Add mov from source to any free concrete register.
         """
         conc = self._pop_free_reg()
         self._concrete[source] = conc
@@ -160,7 +219,7 @@ class AsmUnit:
 
     def loads(self, *sources: Register) -> 'AsmUnit':
         """
-        Add mov from source to any free register
+        Loads all the given registers.
         """
         for source in sources:
             self.load(source)
@@ -168,57 +227,88 @@ class AsmUnit:
 
     def instruction(self, line: str) -> 'AsmUnit':
         """
-        Add an instruction. Replaces pseudo register names with concrete ones constructed by previous load()/loads()
+        Add an instruction.
+        Replaces pseudo register names with concrete ones added by previous load()/loads()
         """
-        result = self.replace_pseudo_regs(line)
+        result = self._replace_pseudo_regs(line)
         self._lines.append(result)
         return self
 
-    def replace_pseudo_regs(self, expr: str, reg_width: RegWidth = None) -> str:
+    def _replace_pseudo_regs(self, expr: str, reg_width: RegWidth = None) -> str:
         for (reg, conc) in self._concrete.items():
             expr = expr.replace(str(reg), str(ConcreteRegister(conc, reg_width or reg.width())))
         return expr
 
     def store(self, target: Register) -> 'AsmUnit':
         """
-        Adds mov…
+        Adds mov from the concrete register assigned to target to the slot for target on the frame.
         """
         conc = self[target]
         self._lines.append(f"movq {ConcreteRegister(conc, RegWidth.QUAD)}, {self._regs[target]}(%rbp)")
         return self
 
+    def stores(self, *targets: Register) -> 'AsmUnit':
+        """
+        Stores all the given registers.
+        """
+        for target in targets:
+            self.store(target)
+        return self
+
     def move(self, source: Register, target: Register) -> 'AsmUnit':
+        """
+        Adds a 64-bit wide move between the concrete registers representing the given pseudo-registers.
+        """
         self._lines.append(f"movq {ConcreteRegister(self[source], RegWidth.QUAD)}, {ConcreteRegister(self[target], RegWidth.QUAD)}")
         return self
 
     def move_to_concrete(self, source: Register, target: str) -> 'AsmUnit':
+        """
+        Adds a 64-bit wide move from the concrete register representing source
+        to the concrete register with base name target.
+        """
         self._lines.append(
             f"movq {ConcreteRegister(self[source], RegWidth.QUAD)}, {ConcreteRegister(target, RegWidth.QUAD)}")
         return self
 
     def move_from_concrete(self, source: str, target: Register) -> 'AsmUnit':
+        """
+        The inverse of move_to_concrete.
+        """
         self._lines.append(
             f"movq {ConcreteRegister(source, RegWidth.QUAD)}, {ConcreteRegister(self[target], RegWidth.QUAD)}")
         return self
 
-    def move_from_anything_to_concrete_reg(self, source: str, target: ConcreteRegister) -> 'AsmUnit':
-        return self.raw(f"movq {self.replace_pseudo_regs(source, RegWidth.QUAD)}, {target}")
-
-    def stores(self, *targets: Register) -> 'AsmUnit':
-        for target in targets:
-            self.store(target)
-        return self
+    def move_from_anything_to_concrete_reg(self, source: str, target: str) -> 'AsmUnit':
+        """
+        Adds a 64-bit wide move from source to the concrete register with base name target.
+        Source may be any register-, immediate- or address-mode-like expression.
+        """
+        return self.raw(f"movq {self._replace_pseudo_regs(source, RegWidth.QUAD)}, {ConcreteRegister(target, RegWidth.QUAD)}")
 
     def _pop_free_reg(self) -> str:
         return self._usable.pop(0)
 
     def __getitem__(self, reg: Register) -> str:
+        """
+        :return: The concrete register representing reg.
+        """
         return self._concrete[reg]
 
 
 class Function:
+    """
+    An assembly function.
+    In the source code, a function starts with ".function <name> <number of args> <number of results>".
+    The maximum number of results is 1.
+    A function ends with ".endfunction".
+    The function object takes care of prologue and epilogue.
+    """
 
     def __init__(self, line_number: int, line: str):
+        """
+        :param line: The line containing the ".function" directive.
+        """
         self.line_number = line_number
         self._instrs = []  # type: List[Instruction]
         [keyword, self.name, args, ret] = line.split()
@@ -227,6 +317,9 @@ class Function:
         self._has_result = ret == "1"
 
     def extend(self, *instrs: 'Instruction') -> 'Function':
+        """
+        Add instrs to this function.
+        """
         self._instrs.extend(instrs)
         return self
 
@@ -271,8 +364,13 @@ ret
 
         return result
 
+
 def registers_in(raw: str) -> List[Register]:
+    """
+    Returns all pseudo-registers occurring in raw.
+    """
     return list(map(Register, re.findall("%@[jr0-9]+[lwd]?", raw)))
+
 
 class Instruction:
     """
@@ -291,7 +389,10 @@ class Instruction:
         return registers_in(self.line)
 
     def writeback_registers(self) -> List[Register]:
-        # Safe default
+        """
+        :return: A list of pseudo-registers which this instruction writes back to the frame.
+           Default is to write back all registers.
+        """
         return self.registers()
 
     @classmethod
@@ -316,15 +417,9 @@ class Instruction:
         raise MolkiError(f"No instruction class matches line {line_number}: {line}")
 
 
-class SpecialInstruction(Instruction):
-    """
-    Need extra handling, but have direct counter parts in x86
-    """
-
-
 class ThreeAddressCode(Instruction):
     """
-    instr [ <source 1> | <source 2> ] -> <target register>
+    Syntax: instr [ <source 1> | <source 2> ] -> <target register>
     """
 
     def toAsm(self, regs: RegisterTable) -> str:
@@ -346,8 +441,8 @@ class ThreeAddressCode(Instruction):
         return str(AsmUnit(regs, ["b", "c", "si", "di", "r8"])
                    .comment(self.line)
                    .loads(*self.registers())
-                   .move_from_anything_to_concrete_reg(source1_raw, ConcreteRegister('d', RegWidth.QUAD))
-                   .move_from_anything_to_concrete_reg(source2_raw, ConcreteRegister('a', RegWidth.QUAD))
+                   .move_from_anything_to_concrete_reg(source1_raw, 'd')
+                   .move_from_anything_to_concrete_reg(source2_raw, 'a')
                    .instruction(actual)
                    .move_from_concrete("a", target)
                    .store(target))
@@ -362,7 +457,7 @@ class ThreeAddressCode(Instruction):
 
 class MultInstruction(ThreeAddressCode):
     """
-    [i]mul [ <source 1> | <source 2> ] -> <target register>
+    Syntax: [i]mul [ <source 1> | <source 2> ] -> <target register>
     """
 
     @classmethod
@@ -375,7 +470,7 @@ class MultInstruction(ThreeAddressCode):
 
 class DivInstruction(Instruction):
     """
-    [i]div [ <source 1> | <source 2> ] -> [ <target register div> | <target register mod> ]
+    Syntax: [i]div [ <source 1> | <source 2> ] -> [ <target register div> | <target register mod> ]
     """
 
     def toAsm(self, regs: RegisterTable):
@@ -398,16 +493,16 @@ class DivInstruction(Instruction):
         return str(AsmUnit(regs, ["c", "si", "di", "r8", "r9", "r10"])
                    .comment(self.line)
                    .loads(*self.registers())
-                   .move_from_anything_to_concrete_reg(source1_raw, ConcreteRegister('a', RegWidth.QUAD))
-                   .move_from_anything_to_concrete_reg(source2_raw, ConcreteRegister('b', RegWidth.QUAD))
+                   .move_from_anything_to_concrete_reg(source1_raw, 'a')
+                   .move_from_anything_to_concrete_reg(source2_raw, 'b')
                    .raw("cltd")
                    .instruction(f"{opcode} {ConcreteRegister('b', reg_width)}")
                    .move_from_concrete("a", target_div)
                    .store(target_div)) + "\n" + \
                str(AsmUnit(regs, ["c", "si", "di", "r8", "r9", "r10"])
                    .loads(*self.registers())
-                   .move_from_anything_to_concrete_reg(source1_raw, ConcreteRegister('a', RegWidth.QUAD))
-                   .move_from_anything_to_concrete_reg(source2_raw, ConcreteRegister('b', RegWidth.QUAD))
+                   .move_from_anything_to_concrete_reg(source1_raw, 'a')
+                   .move_from_anything_to_concrete_reg(source2_raw, 'b')
                    .raw("cltd")
                    .instruction(f"{opcode} {ConcreteRegister('b', reg_width)}")
                    .move_from_concrete("d", target_mod)
@@ -421,7 +516,7 @@ class DivInstruction(Instruction):
 
 class ShiftInstruction(Instruction):
     """
-    {shl,shr,sal,sar,rol,ror} [ <source 1> | <source 2> ] -> <target register>
+    Syntax: {shl,shr,sal,sar,rol,ror} [ <source 1> | <source 2> ] -> <target register>
     """
 
     def toAsm(self, regs: RegisterTable):
@@ -447,7 +542,7 @@ class ShiftInstruction(Instruction):
         return str(AsmUnit(regs, ["a", "b", "d"])
                    .comment(self.line)
                    .loads(source1)
-                   .allocate_register(target)
+                   .reserve_register(target)
                    .raw(f"movb {source2}, %cl")
                    .instruction(instr)
                    .move(source1, target)
@@ -465,7 +560,7 @@ class MetaInstruction(Instruction):
 
 class CallInstruction(MetaInstruction):
     """
-    call <function name> [ <argument> | <argument> | ... | <argument> ] (-> <result register>)?
+    Syntax: call <function name> [ <argument> | <argument> | ... | <argument> ] (-> <result register>)?
     """
 
     def toAsm(self, regs: RegisterTable):
@@ -498,9 +593,10 @@ class CallInstruction(MetaInstruction):
     def matches(cls, line: str):
         return line.startswith("call ")
 
+
 class BasicInstruction(Instruction):
     """
-    Trivially convertable to x86
+    Trivially convertable to x86, only pseudo-registers are allocated.
     """
 
     def toAsm(self, regs: RegisterTable) -> str:
@@ -516,12 +612,14 @@ class BasicInstruction(Instruction):
 
 
 class BasicInstructionNoWriteback(BasicInstruction):
+
     def writeback_registers(self) -> List[Register]:
         return []
 
     @classmethod
     def matches(cls, line: str):
         return line.startswith("cmp") or line.startswith("test") or line.startswith("push")
+
 
 class Directive(Instruction):
 
@@ -530,6 +628,9 @@ class Directive(Instruction):
 
 
 def process_lines(lines: List[str]) -> str:
+    """
+    Converts lines (in pseudo-assembler) to actual assembler.
+    """
     pre_lines = []  # type: List[str]
     functions = []  # type: List[Function]
     cur_func = None
@@ -565,9 +666,9 @@ def process(code: str) -> str:
     return process_lines(code.splitlines())
 
 
-def assemble(file: str, output: str = "test.o"):
+def assemble(asm_source: str, output: str = "test.o"):
     with tempfile.NamedTemporaryFile(suffix=".s", mode="w") as f:
-        print(file, file=f)
+        print(asm_source, file=f)
         f.flush()
         os.system(f"as {f.name} -o {output}")
 
