@@ -5,13 +5,6 @@ Basic meta assembler to assembler compiler
 Syntax based on GNU assembler (AT&T syntax)
 
 Requires python3.6
-
-
-TODO
-- cli frontend: ./script input output
-- language specification
-- testing
-
 """
 
 import argparse, os, re, sys, tempfile
