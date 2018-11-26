@@ -634,6 +634,7 @@ def process_lines(lines: List[str]) -> str:
                 cur_func.extend(Directive(i, "/*" + comment))
             else:
                 pre_lines.append("/*" + comment)
+
         try:
             if len(line.strip()) == 0:
                 if cur_func is not None:
@@ -670,22 +671,11 @@ def process(code: str) -> str:
     return process_lines(code.splitlines())
 
 
-def assemble(asm_source: str, output: str = "test.o"):
-    with tempfile.NamedTemporaryFile(suffix=".s", mode="w") as f:
-        print(asm_source, file=f)
-        f.flush()
-        os.system(f"as {f.name} -o {output}")
-
-
-def compile_and_run(file: str, output: str = "test"):
-    assemble(file, output + ".o")
-    script_path = os.path.dirname(__file__)
-    print("return code: " + str(os.system(f"gcc {script_path}/runtime.c {output}.o -o {output} && ./{output}") >> 8))
-
 if __name__ == "__main__":
+
     import argparse
 
-    parser = argparse.ArgumentParser(description="molki is an assembly line performing register allocation written by two tired weirdos in a long night in room 020")
+    parser = argparse.ArgumentParser(description="molki is an assembly line performing register allocation written by two nerds once upon a long night in the lab")
     parser.add_argument("mode", metavar="MODE", type=str, choices=["print", "assemble", "compile", "run"],
                         help='What to do with the input program: "print" generates assembly and prints it to stdout with line numbers, ' + \
                              '"assemble" writes assembly to the output file, ' + \
