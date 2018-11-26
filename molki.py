@@ -784,24 +784,35 @@ if False:
     """))
 
 if __name__ == "__main__":
-    mode = "assemble"
-    if len(sys.argv) >= 2 and sys.argv[1] == "--run":
-        mode = "run"
-    if len(sys.argv) >= 2 and sys.argv[1] == "--line-numbers":
-        mode = "line-numbers"
+    import argparse
 
-    input = None
+    parser = argparse.ArgumentParser(description="molki is an assembly line performing register allocation written by two tired weirdos in a long night in room 020")
+    parser.add_argument("mode", metavar="MODE", type=str, choices=["print", "assemble", "compile", "run"],
+                        help='What to do with the input program: "print" generates assembly and prints it to stdout with line numbers, ' + \
+                             '"assemble" writes assembly to the output file, ' + \
+                             '"compile" additionally links in the runtime,' + \
+                             '"run" additionally executes the result.')
+    parser.add_argument("input", metavar="FILE", type=str, default="-", help="Input file in pseudo-assembly. Defaults to stdin.")
+    parser.add_argument("-o", metavar="OUTPUT", type=str, default="a.out", help="Basename for output. Assembly is written to OUTPUT.s, the binary is written to OUTPUT")
+    args = parser.parse_args()
 
-    with open("/dev/stdin") as f:
+    mode = args.mode
+    inputfile = "/dev/stdin" if args.input == '-' else args.input
+    outputfile = args.o
+
+    with open(inputfile) as f:
         input = f.read()
 
     result = process(input)
 
-    if mode == "assemble":
-        print(result)
-    elif mode == "line-numbers":
+    if mode == "print":
         print("\n".join(f"{i + 1:3}: {line}" for i, line in enumerate(result.splitlines())))
-    elif mode == "run":
-        compile_and_run(result)
     else:
-        raise MolkiError("Huh?")
+        # In any other mode, we write the assembly file
+        with open(outputfile + ".s", "w") as f:
+            f.write(result)
+        if mode in ["compile", "run"]:
+            script_path = os.path.dirname(__file__)
+            os.system(f"gcc {script_path}/runtime.c {outputfile}.s -o {outputfile}")
+        if mode == "run":
+            os.system(f"./{outputfile}")

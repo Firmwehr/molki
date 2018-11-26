@@ -1,6 +1,7 @@
 Molki
 =====
-A basic register allocator
+
+molki is an assembly line performing register allocation.
 
 License
 -------
