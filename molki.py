@@ -591,7 +591,7 @@ class CallInstruction(MetaInstruction):
 
     @classmethod
     def matches(cls, line: str):
-        return line.startswith("call ")
+        return line.startswith("call ") and "[" in line
 
 
 class BasicInstruction(Instruction):
