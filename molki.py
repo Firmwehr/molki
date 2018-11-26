@@ -347,7 +347,9 @@ ret
         for instr in self._instrs:
             try:
                 content += instr.toAsm(table)
-                content += "\n\n"
+                content += "\n"
+                if not isinstance(instr, Directive):
+                    content += "\n"
             except MolkiError as e:
                 print(f"error in line {instr.line_number}: {instr.line}", file=sys.stderr)
                 raise e
@@ -640,7 +642,12 @@ def process_lines(lines: List[str]) -> str:
             else:
                 pre_lines.append("/*" + comment)
         try:
-            if line.startswith(".function"):
+            if len(line.strip()) == 0:
+                if cur_func is not None:
+                    cur_func.extend(Directive(i, ""))
+                else:
+                    pre_lines.append("")
+            elif line.startswith(".function"):
                 if cur_func is not None:
                     print(f"Warning: Inserted missing .endfunction before line {i}", file=sys.stderr)
                 cur_func = Function(i, line)
