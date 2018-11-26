@@ -357,8 +357,6 @@ ret
         result += content
         if self._has_result:
             result += f"movq {table[Register('%@r0')]}(%rbp), %rax\n"
-        else:
-            result += f"movq $0xBAAAAAAAAAADF00D, %rax\n"
         result += f"add ${table.size()}, %rsp\n"
         result += FUNCTION_FOOTER
 
