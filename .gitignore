@@ -1,3 +1,5 @@
+*~
 *.o
-*.s
 *.out
+*.s
+!examples/*.s
