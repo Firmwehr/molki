@@ -633,6 +633,12 @@ def process_lines(lines: List[str]) -> str:
     functions = []  # type: List[Function]
     cur_func = None
     for i, line in enumerate(map(str.strip, lines), start=1):
+        if "/*" in line:
+            [line, comment] = line.split("/*")
+            if cur_func is not None:
+                cur_func.extend(Directive(i, "/*" + comment))
+            else:
+                pre_lines.append("/*" + comment)
         try:
             if line.startswith(".function"):
                 if cur_func is not None:
