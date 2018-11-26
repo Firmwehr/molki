@@ -418,7 +418,7 @@ class ThreeAddressCode(Instruction):
     def toAsm(self, regs: RegisterTable) -> str:
         m = re.match(r"([a-z]+)\s*\[([^\]]*)\]\s*->\s*(%@[jr0-9]+[lwd]?)", self.line)
         if not m:
-            raise MolkiError("Andi fails at regex")
+            raise MolkiError("Invalid three-address instruction")
 
         opcode = m.group(1)
         args = list(map(str.strip, m.group(2).split("|")))
@@ -469,7 +469,7 @@ class DivInstruction(Instruction):
     def toAsm(self, regs: RegisterTable):
         m = re.match(r"([a-z]+)\s*\[([^\]]*)\]\s*->\s*\[([^\]]*)\]", self.line)
         if not m:
-            raise MolkiError("Andi fails at regex")
+            raise MolkiError("Invalid div instruction")
 
         opcode = m.group(1)
         args = list(map(str.strip, m.group(2).split("|")))
@@ -515,7 +515,7 @@ class ShiftInstruction(Instruction):
     def toAsm(self, regs: RegisterTable):
         m = re.match(r"([a-z]+)\s*\[([^\]]*)\]\s*->\s*(%@[jr0-9]+[lwd]?)", self.line)
         if not m:
-            raise MolkiError("Andi fails at regex")
+            raise MolkiError("Invalid shift instruction")
 
         opcode = m.group(1)
         args = list(map(str.strip, m.group(2).split("|")))
@@ -559,7 +559,7 @@ class CallInstruction(MetaInstruction):
     def toAsm(self, regs: RegisterTable):
         m = re.match(r"call\s+([\w]+)\s*\[([^\]]*)\]\s*(->\s*(%@[jr0-9]+[lwd]?))?", self.line)
         if not m:
-            raise MolkiError("Andi fails at regex")
+            raise MolkiError("Invalid call instruction")
 
         function_name = m.group(1)
         args = list(map(str.strip, m.group(2).split("|")))
