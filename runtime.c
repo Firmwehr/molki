@@ -42,10 +42,10 @@ void *__stdlib_malloc(void)
 
 void *__stdlib_calloc(void)
 {
-    int64_t nmemb;
-    int64_t size;
-    asm("movq 24(%%rbp), %0\n\t" : "=r" (size));
-    asm("movq 16(%%rbp), %0\n\t" : "=r" (nmemb));
+    uint32_t nmemb;
+    uint32_t size;
+    asm("movl 24(%%rbp), %0\n\t" : "=r" (size));
+    asm("movl 16(%%rbp), %0\n\t" : "=r" (nmemb));
     return calloc(nmemb, size);
 }
 
