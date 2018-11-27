@@ -573,7 +573,7 @@ class CallInstruction(MetaInstruction):
 
         asm_unit = AsmUnit(regs, [])
         asm_unit.comment(self.line)
-        for arg in args:
+        for arg in reversed(args):
             pushq = Instruction.match_line(self.line_number, f"pushq {arg}")
             asm_unit.raw(pushq.toAsm(regs))
 
