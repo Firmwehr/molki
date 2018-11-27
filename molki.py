@@ -504,7 +504,7 @@ class DivInstruction(Instruction):
 
     @classmethod
     def matches(cls, line: str):
-        return ThreeAddressCode.matches(line) and line.startswith("div") or line.startswith("idiv")
+        return ThreeAddressCode.matches(line) and (line.startswith("div") or line.startswith("idiv"))
 
 
 class ShiftInstruction(Instruction):
