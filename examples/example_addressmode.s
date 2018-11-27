@@ -12,3 +12,4 @@
     call __stdlib_println [ %@2 ]
 
     movq $0, %@r0
+    .endfunction

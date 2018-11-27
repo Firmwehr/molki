@@ -7,9 +7,9 @@ Syntax based on GNU assembler (AT&T syntax)
 Requires python3.6
 """
 
-import argparse, os, re, sys, tempfile
+import os, re, sys
 from enum import Enum
-from typing import Dict, Iterable, List
+from typing import Dict, List
 
 
 class MolkiError(Exception):
@@ -117,9 +117,10 @@ class RegisterTable:
     Maps register to frame offset (in bytes)
     """
 
-    def __init__(self):
+    def __init__(self, func: 'Function'):
         self._raw = {}  # type: Dict[str, int]
         self._cur_offset = 0
+        self.function = func
 
     def __getitem__(self, reg: Register) -> int:
         """
@@ -228,7 +229,7 @@ class AsmUnit:
         return self
 
     def _replace_pseudo_regs(self, expr: str, reg_width: RegWidth = None) -> str:
-        for (reg, conc) in self._concrete.items():
+        for (reg, conc) in sorted(self._concrete.items(), key=lambda t : len(str(t[0])), reverse=True):
             expr = expr.replace(str(reg), str(ConcreteRegister(conc, reg_width or reg.width())))
         return expr
 
@@ -317,7 +318,7 @@ class Function:
         return self
 
     def toAsm(self) -> str:
-        table = RegisterTable()
+        table = RegisterTable(self)
         for i in range(self._num_params):
             reg = Register(f"%@{i}")
             table[reg] = 16 + 8 * i
@@ -350,12 +351,16 @@ ret
         result = FUNCTION_HEADER
         result += f"sub ${table.size()}, %rsp\n\n"
         result += content
+        result += self.function_return_label() + ":\n"
         if self._has_result:
             result += f"movq {table[Register('%@r0')]}(%rbp), %rax\n"
         result += f"add ${table.size()}, %rsp\n"
         result += FUNCTION_FOOTER
 
         return result
+
+    def function_return_label(self) -> str:
+        return f".{self.name}____________return_block_of_this_function"
 
 
 def registers_in(raw: str) -> List[Register]:
@@ -399,6 +404,7 @@ class Instruction:
             MultInstruction,
             DivInstruction,
             ShiftInstruction,
+            ReturnInstruction,
             ThreeAddressCode,
             BasicInstructionNoWriteback,
             BasicInstruction
@@ -618,6 +624,19 @@ class Directive(Instruction):
 
     def toAsm(self, _: RegisterTable) -> str:
         return self.line
+
+
+class ReturnInstruction(Instruction):
+    """
+    Return instruction, syntax `return` that jumps to the return block
+    """
+
+    def toAsm(self, regs: RegisterTable) -> str:
+        return f"jmp {regs.function.function_return_label()}"
+
+    @classmethod
+    def matches(cls, line: str):
+        return line.startswith("return")
 
 
 def process_lines(lines: List[str]) -> str:

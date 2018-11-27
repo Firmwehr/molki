@@ -19,6 +19,8 @@ The directives `.function` and `.endfunction` can be used to generate the prolog
 
 Within a function defined by `.function`, the pseudo-registers and pseudo-instructions can be used.
 
+Functions have to end with `.endfunction`, the `return` function jumps to the generated epilogue.
+
 Pseudo-registers are referred to as `%@<n>`, where n is a non-negative integer. The first pseudo-registers hold the function's arguments. In addition, the register `%@r0` holds a function's return value.
 
 Pseudo-registers take the same size suffixes as `r8` through `r15`.
