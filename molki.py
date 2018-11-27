@@ -562,7 +562,7 @@ class CallInstruction(MetaInstruction):
             raise MolkiError("Invalid call instruction")
 
         function_name = m.group(1)
-        args = list(map(str.strip, m.group(2).split("|")))
+        args = list(map(str.strip, m.group(2).split("|"))) if len(m.group(2).strip()) > 0 else []
         result_raw = m.group(4) if len(m.groups()) > 3 else None
 
         asm_unit = AsmUnit(regs, [])
