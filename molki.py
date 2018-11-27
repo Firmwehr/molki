@@ -99,7 +99,7 @@ class ConcreteRegister:
                     RegWidth.DOUBLE: "e" + self.name,
                     RegWidth.QUAD: "r" + self.name}[self.width]
         elif self.name in ["r" + str(i) for i in range(8, 16)]:
-            return {RegWidth.BYTE: self.name + "l",
+            return {RegWidth.BYTE: self.name + "b",
                     RegWidth.WORD: self.name + "w",
                     RegWidth.DOUBLE: self.name + "d",
                     RegWidth.QUAD: self.name}[self.width]
@@ -175,7 +175,7 @@ class AsmUnit:
         self._lines = []   # type: List[str]
         self._concrete = {}  # type: Dict[Register, str]
         self._regs = regs
-        self._usable = usable_regs or ["a", "b", "c", "d"]  # type: List[str]
+        self._usable = usable_regs or ["r8", "r9", "r10", "r11", "r12", "r13"]  # type: List[str]
 
     def __str__(self):
         """
@@ -437,7 +437,7 @@ class ThreeAddressCode(Instruction):
 
         actual = self.get_actual_instruction(opcode, reg_width)
 
-        return str(AsmUnit(regs, ["b", "c", "si", "di", "r8"])
+        return str(AsmUnit(regs)
                    .comment(self.line)
                    .loads(*self.registers())
                    .move_from_anything_to_concrete_reg(source1_raw, 'd')
@@ -489,7 +489,7 @@ class DivInstruction(Instruction):
 
         reg_width = target_div.width()
 
-        return str(AsmUnit(regs, ["c", "si", "di", "r8", "r9", "r10"])
+        return str(AsmUnit(regs)
                    .comment(self.line)
                    .loads(*self.registers())
                    .move_from_anything_to_concrete_reg(source1_raw, 'a')
@@ -498,7 +498,7 @@ class DivInstruction(Instruction):
                    .instruction(f"{opcode} {ConcreteRegister('b', reg_width)}")
                    .move_from_concrete("a", target_div)
                    .store(target_div)) + "\n" + \
-               str(AsmUnit(regs, ["c", "si", "di", "r8", "r9", "r10"])
+               str(AsmUnit(regs)
                    .loads(*self.registers())
                    .move_from_anything_to_concrete_reg(source1_raw, 'a')
                    .move_from_anything_to_concrete_reg(source2_raw, 'b')
@@ -538,7 +538,7 @@ class ShiftInstruction(Instruction):
 
         instr = f"{opcode} %cl, {source1_raw}"
 
-        return str(AsmUnit(regs, ["a", "b", "d"])
+        return str(AsmUnit(regs)
                    .comment(self.line)
                    .loads(source1)
                    .reserve_register(target)
