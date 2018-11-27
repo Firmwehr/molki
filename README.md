@@ -15,7 +15,7 @@ The Pseudo-Assembly Language
 
 The pseudo-assembly language is an extension of GNU x86_64 assembly with the following additions:
 
-The directives `.function` and `.endfunction` can be used to generate the prologue and epilogue of functions. `.function` has the following syntax: `.function <name> <number of args> <number of results>`. The maximum number of results is 1.
+The directives `.function` and `.endfunction` can be used to generate the prologue and epilogue of functions. `.function` has the following syntax: `.function <name> <number of args> <number of results>`. The maximum number of results is 1. If you would like to handle the result yourself (i.e. place it into %rax), then specify 0 results in `.function` no matter what.
 
 Within a function defined by `.function`, the pseudo-registers and pseudo-instructions can be used.
 
@@ -82,6 +82,8 @@ call <function name> [ <argument> | <argument> | ... | <argument> ] (-> <result 
 ```
 
 There is no check on the validity of the function call.
+
+If you would like to handle receiving the result yourself (i.e. move it from %rax), then do not use the `-> <register>` part even if the function returns a value.
 
 Example
 -------
