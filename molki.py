@@ -563,7 +563,7 @@ class CallInstruction(MetaInstruction):
     """
 
     def toAsm(self, regs: RegisterTable):
-        m = re.match(r"call\s+([\w]+)\s*\[([^\]]*)\]\s*(->\s*(%@[jr0-9]+[lwd]?))?", self.line)
+        m = re.match(r"call\s+([a-zA-Z._$][\w$_]*)\s*\[([^\]]*)\]\s*(->\s*(%@[jr0-9]+[lwd]?))?", self.line)
         if not m:
             raise MolkiError("Invalid call instruction")
 
