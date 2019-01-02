@@ -461,7 +461,7 @@ class MultInstruction(ThreeAddressCode):
 
     @classmethod
     def matches(cls, line: str):
-        return ThreeAddressCode.matches(line) and line.startswith("mul") or line.startswith("imul")
+        return ThreeAddressCode.matches(line) and (line.startswith("mul") or line.startswith("imul"))
 
     def get_actual_instruction(self, opcode: str, reg_width: RegWidth):
         return f"{opcode} {ConcreteRegister('d', reg_width)}"
