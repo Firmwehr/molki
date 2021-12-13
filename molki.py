@@ -721,6 +721,6 @@ if __name__ == "__main__":
             f.write(result)
         if mode in ["compile", "run"]:
             script_path = os.path.dirname(__file__)
-            os.system(f"gcc {script_path}/runtime.c {outputfile}.s -o {outputfile}")
+            os.system(f"gcc -O0 -fno-omit-frame-pointer {script_path}/runtime.c {outputfile}.s -o {outputfile}")
         if mode == "run":
             os.system(f"./{outputfile}")
