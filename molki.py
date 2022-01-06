@@ -488,13 +488,18 @@ class DivInstruction(Instruction):
         target_mod = Register(targets[1])
 
         reg_width = target_div.width()
+        second_reg_num = 9
+        if "$" in source1_raw:
+            second_reg_num = 8
 
         return str(AsmUnit(regs)
                    .comment(self.line)
                    .loads(*self.registers())
                    .move_from_anything_to_concrete_reg(source1_raw, 'a')
                    .move_from_anything_to_concrete_reg(source2_raw, 'b')
-                   .raw("cltd")
+                   .raw("nop" if "$" in source1_raw else f"movsxd %r8d, %rax")
+                   .raw("nop" if "$" in source2_raw else f"movsxd %r{second_reg_num}d, %rbx")
+                   .raw("cqto")
                    .instruction(f"{opcode} {ConcreteRegister('b', reg_width)}")
                    .move_from_concrete("a", target_div)
                    .store(target_div)) + "\n" + \
@@ -502,7 +507,9 @@ class DivInstruction(Instruction):
                    .loads(*self.registers())
                    .move_from_anything_to_concrete_reg(source1_raw, 'a')
                    .move_from_anything_to_concrete_reg(source2_raw, 'b')
-                   .raw("cltd")
+                   .raw("nop" if "$" in source1_raw else "movsxd %r8d, %rax")
+                   .raw("nop" if "$" in source2_raw else f"movsxd %r{second_reg_num}d, %rbx")
+                   .raw("cqto")
                    .instruction(f"{opcode} {ConcreteRegister('b', reg_width)}")
                    .move_from_concrete("d", target_mod)
                    .store(target_mod))
